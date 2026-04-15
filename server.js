@@ -6,6 +6,7 @@ const PORT = process.env.PORT || 3000;
 
 async function fetchOnpe(path) {
   let browser;
+
   try {
     browser = await chromium.launch({
       headless: true,
@@ -16,10 +17,15 @@ async function fetchOnpe(path) {
       ]
     });
 
-    const page = await browser.newPage({
+    const context = await browser.newContext({
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+      extraHTTPHeaders: {
+        "Accept-Language": "es-ES,es;q=0.9"
+      }
     });
+
+    const page = await context.newPage();
 
     await page.goto("https://resultadoelectoral.onpe.gob.pe/main/resumen", {
       waitUntil: "domcontentloaded",
@@ -28,32 +34,35 @@ async function fetchOnpe(path) {
 
     await page.waitForTimeout(3000);
 
-    const data = await page.evaluate(async (urlPath) => {
-      const response = await fetch(`https://resultadoelectoral.onpe.gob.pe${urlPath}`);
-      const contentType = response.headers.get("content-type") || "";
-      const raw = await response.text();
+    const response = await context.request.get(
+      `https://resultadoelectoral.onpe.gob.pe${path}`,
+      {
+        headers: {
+          "Accept": "application/json, text/plain, */*",
+          "Referer": "https://resultadoelectoral.onpe.gob.pe/main/resumen",
+          "Origin": "https://resultadoelectoral.onpe.gob.pe",
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      }
+    );
 
-      return {
-        ok: response.ok,
-        status: response.status,
-        contentType,
-        raw
-      };
-    }, path);
+    const status = response.status();
+    const contentType = response.headers()["content-type"] || "";
+    const raw = await response.text();
 
     let parsed = null;
-    if (data.contentType.includes("application/json")) {
+    if (contentType.includes("application/json")) {
       try {
-        parsed = JSON.parse(data.raw);
+        parsed = JSON.parse(raw);
       } catch { }
     }
 
     return {
-      ok: true,
-      status: data.status,
-      contentType: data.contentType,
+      ok: response.ok(),
+      status,
+      contentType,
       parsed,
-      preview: data.raw.slice(0, 500)
+      preview: raw.slice(0, 500)
     };
   } finally {
     if (browser) await browser.close();
@@ -62,6 +71,21 @@ async function fetchOnpe(path) {
 
 app.get("/", (req, res) => {
   res.send("Servidor ONPE activo");
+});
+
+app.get("/api/onpe", async (req, res) => {
+  try {
+    const result = await fetchOnpe(
+      "/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion"
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: "Error consultando ONPE",
+      error: error.message
+    });
+  }
 });
 
 app.get("/api/onpe/totales", async (req, res) => {
