@@ -1,8 +1,10 @@
 import express from "express";
 import { chromium } from "playwright";
+import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.use(cors());
 
 const ONPE_PAGE_URL = "https://resultadoelectoral.onpe.gob.pe/main/resumen";
 const CACHE_TTL_MS = 15_000;
