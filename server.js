@@ -23,10 +23,7 @@ app.get("/api/onpe", async (req, res) => {
 
     const page = await browser.newPage({
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-      extraHTTPHeaders: {
-        "Accept-Language": "es-ES,es;q=0.9"
-      }
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
     });
 
     await page.goto("https://resultadoelectoral.onpe.gob.pe/main/resumen", {
@@ -38,39 +35,29 @@ app.get("/api/onpe", async (req, res) => {
 
     const data = await page.evaluate(async () => {
       const response = await fetch(
-        "https://resultadoelectoral.onpe.gob.pe/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion",
-        {
-          method: "GET",
-          headers: {
-            "Accept": "application/json, text/plain, */*"
-          }
-        }
+        "https://resultadoelectoral.onpe.gob.pe/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion"
       );
 
       const contentType = response.headers.get("content-type") || "";
-      const text = await response.text();
+      const raw = await response.text();
 
       return {
         ok: response.ok,
         status: response.status,
         contentType,
-        raw: text
+        raw
       };
     });
 
     let parsed = null;
-
     if (data.contentType.includes("application/json")) {
       try {
         parsed = JSON.parse(data.raw);
-      } catch (e) {
-        parsed = null;
-      }
+      } catch { }
     }
 
     res.json({
-      source: "ONPE",
-      fetchOk: data.ok,
+      ok: true,
       status: data.status,
       contentType: data.contentType,
       parsed,
@@ -83,9 +70,7 @@ app.get("/api/onpe", async (req, res) => {
       error: error.message
     });
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    if (browser) await browser.close();
   }
 });
 
