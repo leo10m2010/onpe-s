@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-async function fetchOnpe(path) {
+async function captureOnpeJson(targetPathPart, pageUrl) {
   let browser;
 
   try {
@@ -27,26 +27,17 @@ async function fetchOnpe(path) {
 
     const page = await context.newPage();
 
-    await page.goto("https://resultadoelectoral.onpe.gob.pe/main/resumen", {
-      waitUntil: "domcontentloaded",
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().includes(targetPathPart),
+      { timeout: 60000 }
+    );
+
+    await page.goto(pageUrl, {
+      waitUntil: "networkidle",
       timeout: 60000
     });
 
-    await page.waitForTimeout(3000);
-
-    const response = await context.request.get(
-      `https://resultadoelectoral.onpe.gob.pe${path}`,
-      {
-        headers: {
-          "Accept": "application/json, text/plain, */*",
-          "Referer": "https://resultadoelectoral.onpe.gob.pe/main/resumen",
-          "Origin": "https://resultadoelectoral.onpe.gob.pe",
-          "X-Requested-With": "XMLHttpRequest"
-        }
-      }
-    );
-
-    const status = response.status();
+    const response = await responsePromise;
     const contentType = response.headers()["content-type"] || "";
     const raw = await response.text();
 
@@ -59,7 +50,8 @@ async function fetchOnpe(path) {
 
     return {
       ok: response.ok(),
-      status,
+      status: response.status(),
+      url: response.url(),
       contentType,
       parsed,
       preview: raw.slice(0, 500)
@@ -75,14 +67,15 @@ app.get("/", (req, res) => {
 
 app.get("/api/onpe", async (req, res) => {
   try {
-    const result = await fetchOnpe(
-      "/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion"
+    const result = await captureOnpeJson(
+      "/presentacion-backend/resumen-general/totales",
+      "https://resultadoelectoral.onpe.gob.pe/main/resumen"
     );
     res.json(result);
   } catch (error) {
     res.status(500).json({
       ok: false,
-      message: "Error consultando ONPE",
+      message: "Error capturando respuesta ONPE",
       error: error.message
     });
   }
@@ -90,14 +83,15 @@ app.get("/api/onpe", async (req, res) => {
 
 app.get("/api/onpe/totales", async (req, res) => {
   try {
-    const result = await fetchOnpe(
-      "/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion"
+    const result = await captureOnpeJson(
+      "/presentacion-backend/resumen-general/totales",
+      "https://resultadoelectoral.onpe.gob.pe/main/resumen"
     );
     res.json(result);
   } catch (error) {
     res.status(500).json({
       ok: false,
-      message: "Error consultando totales",
+      message: "Error capturando totales",
       error: error.message
     });
   }
@@ -105,29 +99,15 @@ app.get("/api/onpe/totales", async (req, res) => {
 
 app.get("/api/onpe/participantes", async (req, res) => {
   try {
-    const result = await fetchOnpe(
-      "/presentacion-backend/resumen-general/participantes?idEleccion=10&tipoFiltro=eleccion"
+    const result = await captureOnpeJson(
+      "/presentacion-backend/resumen-general/participantes",
+      "https://resultadoelectoral.onpe.gob.pe/main/resumen"
     );
     res.json(result);
   } catch (error) {
     res.status(500).json({
       ok: false,
-      message: "Error consultando participantes",
-      error: error.message
-    });
-  }
-});
-
-app.get("/api/onpe/elecciones", async (req, res) => {
-  try {
-    const result = await fetchOnpe(
-      "/presentacion-backend/elecciones"
-    );
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      ok: false,
-      message: "Error consultando elecciones",
+      message: "Error capturando participantes",
       error: error.message
     });
   }
