@@ -4,13 +4,8 @@ import { chromium } from "playwright";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.send("Servidor ONPE activo. Prueba /api/onpe");
-});
-
-app.get("/api/onpe", async (req, res) => {
+async function fetchOnpe(path) {
   let browser;
-
   try {
     browser = await chromium.launch({
       headless: true,
@@ -33,11 +28,8 @@ app.get("/api/onpe", async (req, res) => {
 
     await page.waitForTimeout(3000);
 
-    const data = await page.evaluate(async () => {
-      const response = await fetch(
-        "https://resultadoelectoral.onpe.gob.pe/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion"
-      );
-
+    const data = await page.evaluate(async (urlPath) => {
+      const response = await fetch(`https://resultadoelectoral.onpe.gob.pe${urlPath}`);
       const contentType = response.headers.get("content-type") || "";
       const raw = await response.text();
 
@@ -47,7 +39,7 @@ app.get("/api/onpe", async (req, res) => {
         contentType,
         raw
       };
-    });
+    }, path);
 
     let parsed = null;
     if (data.contentType.includes("application/json")) {
@@ -56,21 +48,64 @@ app.get("/api/onpe", async (req, res) => {
       } catch { }
     }
 
-    res.json({
+    return {
       ok: true,
       status: data.status,
       contentType: data.contentType,
       parsed,
       preview: data.raw.slice(0, 500)
-    });
+    };
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+app.get("/", (req, res) => {
+  res.send("Servidor ONPE activo");
+});
+
+app.get("/api/onpe/totales", async (req, res) => {
+  try {
+    const result = await fetchOnpe(
+      "/presentacion-backend/resumen-general/totales?idEleccion=10&tipoFiltro=eleccion"
+    );
+    res.json(result);
   } catch (error) {
     res.status(500).json({
       ok: false,
-      message: "Error consultando ONPE",
+      message: "Error consultando totales",
       error: error.message
     });
-  } finally {
-    if (browser) await browser.close();
+  }
+});
+
+app.get("/api/onpe/participantes", async (req, res) => {
+  try {
+    const result = await fetchOnpe(
+      "/presentacion-backend/resumen-general/participantes?idEleccion=10&tipoFiltro=eleccion"
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: "Error consultando participantes",
+      error: error.message
+    });
+  }
+});
+
+app.get("/api/onpe/elecciones", async (req, res) => {
+  try {
+    const result = await fetchOnpe(
+      "/presentacion-backend/elecciones"
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: "Error consultando elecciones",
+      error: error.message
+    });
   }
 });
 
